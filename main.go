@@ -61,6 +61,10 @@ var roots = []*host{
 }
 
 func main() {
+	if len(os.Args) < 2 {
+		fmt.Println("Syntax: dnstrace <domain>")
+		os.Exit(1)
+	}
 	name := dns.Fqdn(os.Args[1])
 	rtype := dns.TypeA
 	c := new(dns.Client)

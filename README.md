@@ -8,6 +8,7 @@ This tool performs a DNS resolution by tracing the delegation path from the root
 * Query all name servers in parallel and report stats for each
 * Report about non glued name server lookup time
 * Enable DNSSEC query option to better emulate name server queries
+* Compute the cold best path as if the resolver started with an empty cache to recurse queried name
 
 ## Usage
 

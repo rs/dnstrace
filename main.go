@@ -1,131 +1,171 @@
 package main
 
 import (
-	"context"
+	"flag"
 	"fmt"
 	"net"
 	"os"
 	"strings"
 	"time"
 
-	"github.com/fatih/color"
 	"github.com/miekg/dns"
+	"github.com/rs/dnstrace/client"
 )
 
-type host struct {
-	Name        string
-	CachedAddrs []string
-}
+const (
+	cReset    = 0
+	cBold     = 1
+	cRed      = 31
+	cGreen    = 32
+	cYellow   = 33
+	cBlue     = 34
+	cMagenta  = 35
+	cCyan     = 36
+	cGray     = 37
+	cDarkGray = 90
+)
 
-func (s *host) Addrs() []string {
-	if len(s.CachedAddrs) == 0 {
-		ips, err := net.DefaultResolver.LookupHost(context.Background(), s.Name)
-		if err != nil || len(ips) == 0 {
-			fmt.Printf("*** cannot resolve %s: %v\n", s.Name, err)
-			os.Exit(1)
-		}
-		s.CachedAddrs = ips
+func colorize(s interface{}, color int, enabled bool) string {
+	if !enabled {
+		return fmt.Sprintf("%v", s)
 	}
-	return s.CachedAddrs
+	return fmt.Sprintf("\x1b[%dm%v\x1b[0m", color, s)
 }
 
-func (s *host) String() string {
-	return fmt.Sprintf("%s(%s)", s.Name, strings.Join(s.Addrs(), ","))
-}
-
-type delegations map[string][]*host
-
-func (d delegations) Get(fqdn string) []*host {
-	for offset, end := 0, false; !end; offset, end = dns.NextLabel(fqdn, offset) {
-		if servers, found := d[fqdn[offset:]]; found {
-			return servers
-		}
+func init() {
+	flag.Usage = func() {
+		fmt.Fprintf(flag.CommandLine.Output(), "Usage: dnstrace [qtype] <domain>\n\n")
+		flag.PrintDefaults()
 	}
-	return roots
-}
-
-var roots = []*host{
-	&host{"A.root-servers.net.", []string{"198.41.0.4"}},
-	&host{"B.root-servers.net.", []string{"199.9.14.201"}},
-	&host{"C.root-servers.net.", []string{"192.33.4.12"}},
-	&host{"D.root-servers.net.", []string{"199.7.91.13"}},
-	&host{"E.root-servers.net.", []string{"192.203.230.10"}},
-	&host{"F.root-servers.net.", []string{"192.5.5.241"}},
-	&host{"G.root-servers.net.", []string{"192.112.36.4"}},
-	&host{"H.root-servers.net.", []string{"198.97.190.53"}},
-	&host{"I.root-servers.net.", []string{"192.36.148.17"}},
-	&host{"J.root-servers.net.", []string{"192.58.128.30"}},
-	&host{"K.root-servers.net.", []string{"193.0.14.129"}},
-	&host{"L.root-servers.net.", []string{"199.7.83.42"}},
-	&host{"M.root-servers.net.", []string{"202.12.27.33"}},
 }
 
 func main() {
-	if len(os.Args) < 2 {
-		fmt.Println("Syntax: dnstrace <domain>")
+	color := flag.Bool("color", true, "Enable/disable colors")
+	flag.Parse()
+
+	if len(os.Args) < 2 || len(os.Args) > 3 {
+		flag.Usage()
 		os.Exit(1)
 	}
-	name := dns.Fqdn(os.Args[1])
+	name := ""
 	rtype := dns.TypeA
-	c := new(dns.Client)
-
-	// keep track of known delegations
-	delegs := delegations{}
-
-RESOLVE:
-	servers := delegs.Get(name)
-	var r *dns.Msg
-	var rtt time.Duration
-QUERY:
-	for _, server := range servers {
-		for _, addr := range server.Addrs() {
-			var err error
-			m := new(dns.Msg)
-			m.SetQuestion(name, rtype)
-			r, rtt, err = c.Exchange(m, net.JoinHostPort(addr, "53"))
-			if err != nil {
-				color.Red("*** %s(%s): %v\n", server.Name, addr, err)
-				continue
-			}
-			if r.Rcode != dns.RcodeSuccess {
-				os.Exit(1)
-			}
-			for _, rr := range r.Answer {
-				fmt.Println(rr)
-			}
-			for _, ns := range r.Ns {
-				fmt.Println(ns)
-			}
-			color.Blue(";; Received %d bytes from %s in %s\n\n", m.Len(), server, rtt)
-			break QUERY
+	for _, arg := range flag.Args() {
+		if t, found := dns.StringToType[arg]; found {
+			rtype = t
+			continue
 		}
+		if name != "" {
+			flag.Usage()
+			os.Exit(1)
+		}
+		name = dns.Fqdn(arg)
 	}
 
-	for _, rr := range r.Answer {
-		if rr.Header().Rrtype == rtype && rr.Header().Name == name {
-			return
-		} else if rr.Header().Rrtype == dns.TypeCNAME {
-			t := rr.(*dns.CNAME).Target
-			color.Blue(";; Following CNAME %s -> %s\n", rr.Header().Name, t)
-			name = t
-			goto RESOLVE
-		}
+	c := &client.Client{}
+	delegs := client.DelegationCache{}
+	col := func(s interface{}, c int) string {
+		return colorize(s, c, *color)
 	}
 
-	if len(r.Ns) > 0 {
+	m := &dns.Msg{}
+	// Set DNSSEC opt to better emulate the default queries from a nameserver.
+	o := &dns.OPT{
+		Hdr: dns.RR_Header{
+			Name:   ".",
+			Rrtype: dns.TypeOPT,
+		},
+	}
+	o.SetDo()
+	o.SetUDPSize(dns.DefaultMsgSize)
+	m.Extra = append(m.Extra, o)
+
+	for i := 1; i < 100; i++ {
+		servers := delegs.Get(name)
+		m.SetQuestion(name, rtype)
+		rs := c.ParallelQuery(m, servers)
+		fr := rs.Fastest()
+		var r *dns.Msg
+		if fr != nil {
+			r = fr.Msg
+		}
+		if i > 1 {
+			fmt.Println()
+		}
+		fmt.Printf("%d - query %s %s", i, dns.TypeToString[rtype], name)
+		if r != nil {
+			fmt.Printf(": %s", strings.Replace(strings.Replace(r.MsgHdr.String(), ";; ", "", -1), "\n", ", ", -1))
+		}
+		fmt.Println()
+		for _, pr := range rs {
+			ln := 0
+			if pr.Msg != nil {
+				ln = pr.Msg.Len()
+			}
+			rtt := float64(pr.RTT) / float64(time.Millisecond)
+			fmt.Printf(col("  -%4d bytes in %6.2fms on %s(%s)", cDarkGray), ln, rtt, pr.Addr, pr.Server)
+			if pr.Err != nil {
+				err := pr.Err
+				if oerr, ok := err.(*net.OpError); ok {
+					err = oerr.Err
+				}
+				fmt.Printf(": %v", col(err, cRed))
+			}
+			fmt.Print("\n")
+		}
+
+		if r == nil {
+			os.Exit(1)
+		}
+
 		for _, ns := range r.Ns {
-			n := ns.(*dns.NS).Ns
+			ns, ok := ns.(*dns.NS)
+			if !ok {
+				continue // skip DS records
+			}
 			var addrs []string
 			for _, rr := range r.Extra {
-				if a, ok := rr.(*dns.A); ok && a.Hdr.Name == n {
+				if a, ok := rr.(*dns.A); ok && a.Hdr.Name == ns.Ns {
 					addrs = append(addrs, a.A.String())
 				}
 			}
-			delegs[ns.Header().Name] = append(delegs[ns.Header().Name], &host{n, addrs})
-			if len(addrs) == 0 {
-				color.Yellow(";; No glue found for %s\n", n)
+			rtt, err := delegs.Add(ns.Header().Name, ns.Ns, addrs)
+			glue := strings.Join(addrs, ",")
+			if glue == "" {
+				glue = col("no glue", cYellow)
+				if err != nil {
+					glue += fmt.Sprintf(col(": lookup err: %v", cDarkGray), col(err, cRed))
+				} else if rtt == 0 {
+					glue += fmt.Sprintf(col(": cached", cDarkGray))
+				} else {
+					glue += fmt.Sprintf(col(": lookup time: %s", cDarkGray), rtt)
+				}
+			}
+			fmt.Printf("%s %d NS %s (%s)\n", ns.Header().Name, ns.Header().Ttl, ns.Ns, glue)
+		}
+
+		var cname string
+		var done bool
+		for _, rr := range r.Answer {
+			if rr.Header().Rrtype == rtype && rr.Header().Name == name {
+				if !done {
+					fmt.Println()
+				}
+				fmt.Println(rr)
+				done = true
+			} else if rr.Header().Rrtype == dns.TypeCNAME {
+				cname = rr.Header().Name
+				name = rr.(*dns.CNAME).Target
 			}
 		}
-		goto RESOLVE
+		if done {
+			return
+		} else if cname != "" {
+			fmt.Printf(col("\n~ following CNAME %s -> %s\n", cBlue), cname, name)
+			continue
+		}
+
+		if len(r.Ns) == 0 {
+			break
+		}
 	}
 }

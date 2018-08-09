@@ -1,6 +1,22 @@
 # dnstrace
 
-This tool performs a DNS resolution by tracing the delegation path from the root name servers and by following CNAMES. Each additional query is reported.
+This tool performs a DNS resolution by tracing the delegation path from the root name servers, and by following the CNAME chain. Each query is reported with statistics about all delegated name servers.
+
+## Features
+
+* Follow CNAMEs
+* Query all name servers in parallel and report stats for each
+* Report about non glued name server lookup time
+* Enable DNSSEC query option to better emulate name server queries
+
+## Usage
+
+```
+Usage: dnstrace [qtype] <domain>
+
+  -color
+    	Enable/disable colors (default true)
+```
 
 ![](screenshot.png)
 

@@ -1,0 +1,32 @@
+project_name: dnstrace
+builds:
+  -
+    binary: dnstrace
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+      - freebsd
+      - windows
+release:
+  name_template: "{{.ProjectName}}-v{{.Version}}"
+git:
+  short_hash: true
+brew:
+  github:
+    owner: rs
+    name: homebrew-tap
+  commit_author:
+    name: Olivier Poitrey
+    email: rs@rhapsodyk.net
+  homepage: https://github.com/rs/dnstrace
+  description: DNS resolution tracing tool
+nfpm:
+  maintainer: Olivier Poitrey <rs@rhapsodyk.net>
+  description: DNS resolution tracing tool
+  license: MIT
+  formats:
+    - deb
+    - rpm
+  bindir: /usr/bin

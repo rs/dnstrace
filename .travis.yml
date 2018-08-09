@@ -1,0 +1,20 @@
+sudo: required
+language: go
+go: '1.10'
+matrix:
+  allow_failures:
+  - go: master
+script: go test -v -race -cpu=1,2,4 -bench . -benchmem ./...
+deploy:
+  provider: script
+  on:
+    branch: master
+    tags: true
+    condition: "$TRAVIS_OS_NAME = linux && $TRAVIS_GO_VERSION = '1.10'"
+  skip_cleanup: true
+  script: sudo apt-get update && sudo apt-get install rpm && curl -sL http://git.io/goreleaser
+    | bash
+env:
+  global:
+  - secure: 7Hb/SLMTpff9oj9VYaWhl/P6eDqBav17PCIVAjyNxlRSKpRJlNDsYGz3/i1XHy7BiNMKPstOK+VlB3sR4hrGrNew8EVhROXOXl8OFstA0eptdG0TgwBxsjXiXNFRR3ancgrOlbbsfcUx5qXapQEv/kqqhhh1DrR5i/khDeMIUnZ6/Lwtgw4VTbrQD3I599ORXV7VOxu6qQKL9g0w1rJb9UM+zIDJMMULmlYp31toA520dr4tIlKJANYJLlU5hnFJAvq7ywMTbfA5h6nDtahlTP0iF879gmIoXg9MZkynmPZ4fXhdFxn3Y2xLBCUAU+DoGAXvD3ggffUWVOrnZBKXSPVTBpMHbt9Xd/HPitShOeaQQNlaj29Ky4xzD/p2cDCY4oDL8QLtRF2zP7+GfRaUY0ara3D1Q33fyyoVEeiWskCEZSiENZjrxoyevVvjbLCgT7kDJp+szvfVWJp16oHMtLQ/yXt63ZJ0PAJXUp1UJHSrlmy0r7pfEqfRWN47d45b/ld0ARMLOpMpBVGYQK8SeH2hqQ4EAyU9Erf4llFT0c/T5xgO90s+0uPUswqnIj7BuzgILsAFZQsMW3PU3HQx0mmB7m/qHYWbmkudR3C3kkKMP8IPmhZUETcCPzj4Iy93GNU6De1bv+TrjY4OFBPgKEY52ji01940v5bq90UD7jQ=
+  - secure: PZ3RFGPJN5R2PAL1tVSZ6+OESB8U+1yVFN0M2xvKruYXtnKFZQhAErQJcknvK6Dt+FTQ0ufRFrXG7SEPOAET661IbZIj0EOh5qGRT7VlU4fxWYod6hYOJTZ6YoMSyE0MeBDHNTIGffx9d21PKaIFPcP2m3Px1aVfD8GNeAX831u9IpYc8925MFw5mqJsxWKl0oagUIfN4QjL4HNDyq1yFqTDT2KPIyWJjZuZbBUfy3VaSUep/aw+rKF3qZ3IA4tnHnhICNPdA64Ecaqdm1wusZpG//WrXDaw9GML3WP0gcXwZqp4Mth4N8YEOyPlExa0wgyuIl5eSw2gVnnBkF88ROH0mBhhu66JcBAkQZ1GFTKEHlVPiq5dOttYWt3f9gvc8LPU8k2cwwQvFueLPYdJAU8bqLgJfkUqDC2rLIPymNJH1LjdVIhlbeclZFhsQpK34LRKBw2XYHj7Ls3dlY5QRbvjNh31eCW13JEqLGmkbhuT01WsWhcP2YHPRYFPDiz2DKIUdmLe9s2ncFtbqZziSVFNOMgh4ROWFRDImdj2+8VM/xhNsdLFuGIEzU55+k/wMWgPuyq4a8e5uPGH5LcKKns2OCgsd3Ho8y2vWl9KHIL/wk0olk1x4jUiuZiqCj0ViH0ZIwKGONQdnM0NVsdr8yHj2SvS5xPMD0btXBgkm2I=

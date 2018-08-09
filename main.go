@@ -80,7 +80,7 @@ func main() {
 	m.Extra = append(m.Extra, o)
 
 	for i := 1; i < 100; i++ {
-		servers := delegs.Get(name)
+		deleg, servers := delegs.Get(name)
 		m.SetQuestion(name, rtype)
 		rs := c.ParallelQuery(m, servers)
 		fr := rs.Fastest()
@@ -143,28 +143,25 @@ func main() {
 			fmt.Printf("%s %d NS %s (%s)\n", ns.Header().Name, ns.Header().Ttl, ns.Ns, glue)
 		}
 
-		var cname string
-		var done bool
-		for _, rr := range r.Answer {
-			if rr.Header().Rrtype == rtype && rr.Header().Name == name {
-				if !done {
-					fmt.Println()
+		if len(r.Answer) > 0 {
+			var cname string
+			fmt.Println()
+			for _, rr := range r.Answer {
+				if rr.Header().Rrtype == dns.TypeCNAME {
+					cname = rr.Header().Name
+					name = rr.(*dns.CNAME).Target
+				} else {
+					fmt.Println(rr)
 				}
-				fmt.Println(rr)
-				done = true
-			} else if rr.Header().Rrtype == dns.TypeCNAME {
-				cname = rr.Header().Name
-				name = rr.(*dns.CNAME).Target
 			}
-		}
-		if done {
-			return
-		} else if cname != "" {
-			fmt.Printf(col("\n~ following CNAME %s -> %s\n", cBlue), cname, name)
-			continue
+			if cname != "" {
+				fmt.Printf(col("~ following CNAME %s -> %s\n", cBlue), cname, name)
+				continue
+			}
+			break
 		}
 
-		if len(r.Ns) == 0 {
+		if label, _ := delegs.Get(name); len(r.Ns) == 0 || deleg == label {
 			break
 		}
 	}

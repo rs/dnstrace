@@ -54,14 +54,16 @@ func (s Servers) String() string {
 // DelegationCache store and retrive delegations.
 type DelegationCache map[string]Servers
 
-// Get returns the most specific name server for domain.
-func (d DelegationCache) Get(domain string) Servers {
+// Get returns the most specific name servers for domain with its matching label.
+func (d DelegationCache) Get(domain string) (label string, servers Servers) {
 	for offset, end := 0, false; !end; offset, end = dns.NextLabel(domain, offset) {
-		if servers, found := d[domain[offset:]]; found {
-			return servers
+		label = domain[offset:]
+		var found bool
+		if servers, found = d[label]; found {
+			return
 		}
 	}
-	return roots
+	return ".", roots
 }
 
 // Add adds a server as a delegation for domain. If addrs is not specified,

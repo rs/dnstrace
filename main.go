@@ -103,7 +103,8 @@ func main() {
 					ln = pr.Msg.Len()
 				}
 				rtt := float64(pr.RTT) / float64(time.Millisecond)
-				fmt.Printf(col("  - %d bytes in %6.2fms on %s(%s)", cDarkGray), ln, rtt, pr.Addr, pr.Server)
+				lrtt := float64(pr.Server.LookupRTT) / float64(time.Millisecond)
+				fmt.Printf(col("  - %3d bytes in %6.2fms + %6.2fms on %s(%s)", cDarkGray), ln, rtt, lrtt, pr.Addr, pr.Server.Name)
 				if pr.Err != nil {
 					err := pr.Err
 					if oerr, ok := err.(*net.OpError); ok {
@@ -146,13 +147,13 @@ func main() {
 		},
 	}
 	r, rtt, err := c.RecursiveQuery(m, t)
-
 	if err != nil {
 		fmt.Printf(col("*** error: %v\n", cRed), err)
 		os.Exit(1)
 	}
+
 	fmt.Println()
-	fmt.Printf(col(";; Cold best path RTT: %s\n\n", cGray), rtt)
+	fmt.Printf(col(";; Cold best path time: %s\n\n", cGray), rtt)
 	for _, rr := range r.Answer {
 		fmt.Println(rr)
 	}

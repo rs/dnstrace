@@ -37,7 +37,7 @@ func (rs Responses) Fastest() *Response {
 }
 
 type Tracer struct {
-	GotDelegateResponses func(i int, m *dns.Msg, rs Responses)
+	GotDelegateResponses func(i int, m *dns.Msg, rs Responses, last bool)
 	FollowingCNAME       func(domain, target string)
 }
 
@@ -51,7 +51,7 @@ func New() Client {
 
 // ParallelQuery perform an exchange using m with all servers in parallel and
 // return all responses.
-func (c *Client) ParallelQuery(m *dns.Msg, servers Servers) Responses {
+func (c *Client) ParallelQuery(m *dns.Msg, servers []Server) Responses {
 	rc := make(chan Response)
 	cnt := 0
 	for _, s := range servers {
@@ -81,8 +81,9 @@ func (c *Client) RecursiveQuery(m *dns.Msg, tracer Tracer) (r *dns.Msg, rtt time
 	m = m.Copy()
 	qname := m.Question[0].Name
 	qtype := m.Question[0].Qtype
+	zone := "."
 	for i := 1; i < 100; i++ {
-		deleg, servers := c.DCache.Get(qname)
+		_, servers := c.DCache.Get(qname)
 		m.Question[0].Name = qname
 		rs := c.ParallelQuery(m, servers)
 
@@ -99,15 +100,30 @@ func (c *Client) RecursiveQuery(m *dns.Msg, tracer Tracer) (r *dns.Msg, rtt time
 		}
 		rtt += fr.RTT
 
-		done := false
+		var done bool
+		var deleg bool
+		var cname string
 		for _, rr := range r.Answer {
-			if rr.Header().Rrtype == qtype && rr.Header().Name == qname {
+			if rr.Header().Name == qname && rr.Header().Rrtype == qtype {
 				done = true
 				break
+			} else if rr.Header().Rrtype == dns.TypeCNAME {
+				cname = rr.Header().Name
+				qname = rr.(*dns.CNAME).Target
+				zone = "."
+			}
+		}
+		if !done && cname == "" {
+			for _, ns := range r.Ns {
+				if ns, ok := ns.(*dns.NS); ok && len(ns.Header().Name) > len(zone) {
+					deleg = true
+					zone = ns.Header().Name
+					break
+				}
 			}
 		}
 
-		if !done {
+		if deleg {
 			lrttc := make(chan time.Duration)
 			lc := 0
 			for _, ns := range r.Ns {
@@ -115,10 +131,16 @@ func (c *Client) RecursiveQuery(m *dns.Msg, tracer Tracer) (r *dns.Msg, rtt time
 				if !ok {
 					continue // skip DS records
 				}
+				name := ns.Header().Name
 				var addrs []string
 				for _, rr := range r.Extra {
-					if a, ok := rr.(*dns.A); ok && a.Header().Name == ns.Ns {
-						addrs = append(addrs, a.A.String())
+					if rr.Header().Name == ns.Ns {
+						switch a := rr.(type) {
+						case *dns.A:
+							addrs = append(addrs, a.A.String())
+						case *dns.AAAA:
+							addrs = append(addrs, a.AAAA.String())
+						}
 					}
 				}
 				s := Server{
@@ -137,12 +159,13 @@ func (c *Client) RecursiveQuery(m *dns.Msg, tracer Tracer) (r *dns.Msg, rtt time
 						if err != nil {
 							s.LookupErr = err
 						}
-						c.DCache.Add(ns.Header().Name, s)
+						c.DCache.Add(name, s)
 						lrttc <- s.LookupRTT
 					}()
 					continue
 				}
-				c.DCache.Add(ns.Header().Name, s)
+				c.DCache.Add(name, s)
+				c.LCache.Set(s.Name, s.Addrs)
 				if tracer.GotDelegateResponses == nil {
 					// If not traced, do not resolve all NS
 					break
@@ -159,27 +182,17 @@ func (c *Client) RecursiveQuery(m *dns.Msg, tracer Tracer) (r *dns.Msg, rtt time
 		}
 
 		if tracer.GotDelegateResponses != nil {
-			tracer.GotDelegateResponses(i, m.Copy(), rs)
+			last := !deleg && cname == ""
+			tracer.GotDelegateResponses(i, m.Copy(), rs, last)
 		}
 
-		if len(r.Answer) > 0 {
-			var cname string
-			for _, rr := range r.Answer {
-				if rr.Header().Rrtype == dns.TypeCNAME {
-					cname = rr.Header().Name
-					qname = rr.(*dns.CNAME).Target
-				}
+		if cname != "" {
+			if tracer.FollowingCNAME != nil {
+				tracer.FollowingCNAME(cname, qname)
 			}
-			if cname != "" {
-				if tracer.FollowingCNAME != nil {
-					tracer.FollowingCNAME(cname, qname)
-				}
-				continue
-			}
-			return r, rtt, nil
+			continue
 		}
-
-		if label, _ := c.DCache.Get(qname); len(r.Ns) == 0 || deleg == label {
+		if !deleg {
 			return r, rtt, nil
 		}
 	}
@@ -213,6 +226,9 @@ func (c *Client) lookupHost(m *dns.Msg) (addrs []string, rtt time.Duration, err 
 		}
 		if r.RTT > rtt {
 			rtt = r.RTT // get the longest of the two // queries
+		}
+		if r.Msg == nil {
+			continue
 		}
 		for _, rr := range r.Msg.Answer {
 			switch rr := rr.(type) {

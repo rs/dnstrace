@@ -39,29 +39,14 @@ func (s Server) String() string {
 	return fmt.Sprintf("%s %d NS (%s): %v", s.Name, s.TTL, strings.Join(s.Addrs, ","), s.LookupErr)
 }
 
-type Servers []Server
-
-func (s Servers) String() string {
-	if len(s) > 0 {
-		if s[0].Name == "A.root-servers.net." {
-			return "*.root-servers.net."
-		}
-	}
-	names := make([]string, 0, len(s))
-	for _, s := range s {
-		names = append(names, s.Name)
-	}
-	return strings.Join(names, ", ")
-}
-
 // DelegationCache store and retrive delegations.
 type DelegationCache struct {
-	c  map[string]Servers
+	c  map[string][]Server
 	mu sync.Mutex
 }
 
 // Get returns the most specific name servers for domain with its matching label.
-func (d *DelegationCache) Get(domain string) (label string, servers Servers) {
+func (d *DelegationCache) Get(domain string) (label string, servers []Server) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	for offset, end := 0, false; !end; offset, end = dns.NextLabel(domain, offset) {
@@ -85,7 +70,7 @@ func (d *DelegationCache) Add(domain string, s Server) error {
 		}
 	}
 	if d.c == nil {
-		d.c = map[string]Servers{}
+		d.c = map[string][]Server{}
 	}
 	d.c[domain] = append(d.c[domain], s)
 	return nil

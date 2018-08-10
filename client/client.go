@@ -3,6 +3,7 @@ package client
 import (
 	"errors"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/miekg/dns"
@@ -74,6 +75,10 @@ func (c *Client) ParallelQuery(m *dns.Msg, servers []Server) Responses {
 	return rs
 }
 
+func domainEqual(d1, d2 string) bool {
+	return strings.ToLower(dns.Fqdn(d1)) == strings.ToLower(dns.Fqdn(d2))
+}
+
 // RecursiveQuery performs a recursive query by querying all the available name
 // servers to gather statistics.
 func (c *Client) RecursiveQuery(m *dns.Msg, tracer Tracer) (r *dns.Msg, rtt time.Duration, err error) {
@@ -104,7 +109,7 @@ func (c *Client) RecursiveQuery(m *dns.Msg, tracer Tracer) (r *dns.Msg, rtt time
 		var deleg bool
 		var cname string
 		for _, rr := range r.Answer {
-			if rr.Header().Name == qname && rr.Header().Rrtype == qtype {
+			if domainEqual(rr.Header().Name, qname) && rr.Header().Rrtype == qtype {
 				done = true
 				break
 			} else if rr.Header().Rrtype == dns.TypeCNAME {
@@ -134,7 +139,7 @@ func (c *Client) RecursiveQuery(m *dns.Msg, tracer Tracer) (r *dns.Msg, rtt time
 				name := ns.Header().Name
 				var addrs []string
 				for _, rr := range r.Extra {
-					if rr.Header().Name == ns.Ns {
+					if domainEqual(rr.Header().Name, ns.Ns) {
 						switch a := rr.(type) {
 						case *dns.A:
 							addrs = append(addrs, a.A.String())

@@ -49,6 +49,7 @@ type DelegationCache struct {
 func (d *DelegationCache) Get(domain string) (label string, servers []Server) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	domain = strings.ToLower(domain)
 	for offset, end := 0, false; !end; offset, end = dns.NextLabel(domain, offset) {
 		label = domain[offset:]
 		var found bool
@@ -64,8 +65,9 @@ func (d *DelegationCache) Get(domain string) (label string, servers []Server) {
 func (d *DelegationCache) Add(domain string, s Server) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	domain = strings.ToLower(domain)
 	for _, s2 := range d.c[domain] {
-		if s2.Name == s.Name {
+		if domainEqual(s2.Name, s.Name) {
 			return nil
 		}
 	}

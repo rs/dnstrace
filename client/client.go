@@ -17,6 +17,15 @@ type Client struct {
 	LCache LookupCache
 }
 
+type ResponseType int
+
+const (
+	ResponseTypeUnknown ResponseType = iota
+	ResponseTypeDelegation
+	ResponseTypeCNAME
+	ResponseTypeFinal
+)
+
 // Response stores a DNS response.
 type Response struct {
 	Server Server
@@ -43,7 +52,7 @@ func (rs Responses) Fastest() *Response {
 }
 
 type Tracer struct {
-	GotDelegateResponses func(i int, m *dns.Msg, rs Responses, last bool)
+	GotDelegateResponses func(i int, m *dns.Msg, rs Responses, rtype ResponseType)
 	FollowingCNAME       func(domain, target string)
 }
 
@@ -110,30 +119,34 @@ func (c *Client) RecursiveQuery(m *dns.Msg, tracer Tracer) (r *dns.Msg, rtt time
 		}
 		rtt += fr.Server.LookupRTT + fr.RTT
 
-		var done bool
-		var deleg bool
+		var rtype ResponseType
 		var cname string
 		for _, rr := range r.Answer {
 			if domainEqual(rr.Header().Name, qname) && rr.Header().Rrtype == qtype {
-				done = true
+				rtype = ResponseTypeFinal
 				break
 			} else if rr.Header().Rrtype == dns.TypeCNAME {
 				cname = rr.Header().Name
 				qname = rr.(*dns.CNAME).Target
 				zone = "."
+				rtype = ResponseTypeCNAME
 			}
 		}
-		if !done && cname == "" {
+		if rtype == ResponseTypeUnknown {
 			for _, ns := range r.Ns {
 				if ns, ok := ns.(*dns.NS); ok && len(ns.Header().Name) > len(zone) {
-					deleg = true
+					rtype = ResponseTypeDelegation
 					zone = ns.Header().Name
 					break
 				}
 			}
+			if rtype == ResponseTypeUnknown {
+				// NOERROR / empty
+				rtype = ResponseTypeFinal
+			}
 		}
 
-		if deleg {
+		if rtype == ResponseTypeDelegation {
 			wg := &sync.WaitGroup{}
 			for _, ns := range r.Ns {
 				ns, ok := ns.(*dns.NS)
@@ -184,17 +197,15 @@ func (c *Client) RecursiveQuery(m *dns.Msg, tracer Tracer) (r *dns.Msg, rtt time
 		}
 
 		if tracer.GotDelegateResponses != nil {
-			last := !deleg && cname == ""
-			tracer.GotDelegateResponses(i, m.Copy(), rs, last)
+			tracer.GotDelegateResponses(i, m.Copy(), rs, rtype)
 		}
 
-		if cname != "" {
+		switch rtype {
+		case ResponseTypeCNAME:
 			if tracer.FollowingCNAME != nil {
 				tracer.FollowingCNAME(cname, qname)
 			}
-			continue
-		}
-		if !deleg {
+		case ResponseTypeFinal:
 			return r, rtt, nil
 		}
 	}

@@ -81,7 +81,7 @@ func main() {
 	c := client.New()
 	c.Client.Timeout = 500 * time.Millisecond
 	t := client.Tracer{
-		GotDelegateResponses: func(i int, m *dns.Msg, rs client.Responses, last bool) {
+		GotDelegateResponses: func(i int, m *dns.Msg, rs client.Responses, rtype client.ResponseType) {
 			fr := rs.Fastest()
 			var r *dns.Msg
 			if fr != nil {
@@ -115,7 +115,7 @@ func main() {
 				fmt.Print("\n")
 			}
 
-			if !last && len(r.Ns) > 0 {
+			if rtype == client.ResponseTypeDelegation {
 				var label string
 				for _, rr := range r.Ns {
 					if ns, ok := rr.(*dns.NS); ok {

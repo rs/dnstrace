@@ -81,7 +81,7 @@ func main() {
 	c := client.New()
 	c.Client.Timeout = 500 * time.Millisecond
 	t := client.Tracer{
-		GotDelegateResponses: func(i int, m *dns.Msg, rs client.Responses, rtype client.ResponseType) {
+		GotIntermediaryResponse: func(i int, m *dns.Msg, rs client.Responses, rtype client.ResponseType) {
 			fr := rs.Fastest()
 			var r *dns.Msg
 			if fr != nil {
@@ -103,8 +103,13 @@ func main() {
 					ln = pr.Msg.Len()
 				}
 				rtt := float64(pr.RTT) / float64(time.Millisecond)
-				lrtt := float64(pr.Server.LookupRTT) / float64(time.Millisecond)
-				fmt.Printf(col("  - %3d bytes in %6.2fms + %6.2fms on %s(%s)", cDarkGray), ln, rtt, lrtt, pr.Addr, pr.Server.Name)
+				lrtt := "0ms (from cache)"
+				if pr.Server.HasGlue {
+					lrtt = "0ms (from glue)"
+				} else if pr.Server.LookupRTT > 0 {
+					lrtt = fmt.Sprintf("%.2fms", float64(pr.Server.LookupRTT)/float64(time.Millisecond))
+				}
+				fmt.Printf(col("  - %d bytes in %.2fms + %s lookup on %s(%s)", cDarkGray), ln, rtt, lrtt, pr.Server.Name, pr.Addr)
 				if pr.Err != nil {
 					err := pr.Err
 					if oerr, ok := err.(*net.OpError); ok {
@@ -130,13 +135,6 @@ func main() {
 						glue = col("glue: "+strings.Join(s.Addrs, ","), cDarkGray)
 					} else {
 						glue = col("no glue", cYellow)
-						if s.LookupErr != nil {
-							glue += fmt.Sprintf(col(": lookup err: %v", cDarkGray), col(s.LookupErr, cRed))
-						} else if s.LookupRTT == 0 {
-							glue += fmt.Sprintf(col(": lookup from cache", cDarkGray))
-						} else {
-							glue += fmt.Sprintf(col(": lookup time: %s", cDarkGray), s.LookupRTT)
-						}
 					}
 					fmt.Printf("%s %d NS %s (%s)\n", label, s.TTL, s.Name, glue)
 				}

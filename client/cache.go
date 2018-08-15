@@ -53,11 +53,11 @@ func (d *DelegationCache) Get(domain string) (label string, servers []Server) {
 	for offset, end := 0, false; !end; offset, end = dns.NextLabel(domain, offset) {
 		label = domain[offset:]
 		var found bool
-		if servers, found = d.c[label]; found {
-			return
+		if _, found = d.c[label]; found {
+			return label, append(servers, d.c[label]...)
 		}
 	}
-	return ".", roots
+	return ".", append(servers, roots...)
 }
 
 // Add adds a server as a delegation for domain. If addrs is not specified,

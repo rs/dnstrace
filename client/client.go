@@ -52,8 +52,8 @@ func (rs Responses) Fastest() *Response {
 }
 
 type Tracer struct {
-	GotDelegateResponses func(i int, m *dns.Msg, rs Responses, rtype ResponseType)
-	FollowingCNAME       func(domain, target string)
+	GotIntermediaryResponse func(i int, m *dns.Msg, rs Responses, rtype ResponseType)
+	FollowingCNAME          func(domain, target string)
 }
 
 // New creates a new Client.
@@ -103,6 +103,26 @@ func (c *Client) RecursiveQuery(m *dns.Msg, tracer Tracer) (r *dns.Msg, rtt time
 	zone := "."
 	for i := 1; i < 100; i++ {
 		_, servers := c.DCache.Get(qname)
+
+		// Resolve servers name if needed.
+		wg := &sync.WaitGroup{}
+		for i, s := range servers {
+			if len(s.Addrs) == 0 {
+				wg.Add(1)
+				go func(s *Server) {
+					var err error
+					lm := m.Copy()
+					lm.SetQuestion(s.Name, 0) // qtypes are set by lookup host
+					s.Addrs, s.LookupRTT, err = c.lookupHost(lm)
+					if err != nil {
+						s.LookupErr = err
+					}
+					wg.Done()
+				}(&servers[i])
+			}
+		}
+		wg.Wait()
+
 		m.Question[0].Name = qname
 		rs := c.ParallelQuery(m, servers)
 
@@ -147,7 +167,6 @@ func (c *Client) RecursiveQuery(m *dns.Msg, tracer Tracer) (r *dns.Msg, rtt time
 		}
 
 		if rtype == ResponseTypeDelegation {
-			wg := &sync.WaitGroup{}
 			for _, ns := range r.Ns {
 				ns, ok := ns.(*dns.NS)
 				if !ok {
@@ -171,33 +190,17 @@ func (c *Client) RecursiveQuery(m *dns.Msg, tracer Tracer) (r *dns.Msg, rtt time
 					TTL:     ns.Header().Ttl,
 					Addrs:   addrs,
 				}
-				if !s.HasGlue {
-					wg.Add(1)
-					go func() {
-						var err error
-						lm := m.Copy()
-						lm.SetQuestion(s.Name, 0) // qtypes are set by lookup host
-						s.Addrs, s.LookupRTT, err = c.lookupHost(lm)
-						if err != nil {
-							s.LookupErr = err
-						}
-						c.DCache.Add(name, s)
-						wg.Done()
-					}()
-					continue
-				}
 				c.DCache.Add(name, s)
 				c.LCache.Set(s.Name, s.Addrs)
-				if tracer.GotDelegateResponses == nil {
-					// If not traced, do not resolve all NS
+				if tracer.GotIntermediaryResponse == nil {
+					// If not traced, only take first NS.
 					break
 				}
 			}
-			wg.Wait()
 		}
 
-		if tracer.GotDelegateResponses != nil {
-			tracer.GotDelegateResponses(i, m.Copy(), rs, rtype)
+		if tracer.GotIntermediaryResponse != nil {
+			tracer.GotIntermediaryResponse(i, m.Copy(), rs, rtype)
 		}
 
 		switch rtype {

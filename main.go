@@ -120,7 +120,8 @@ func main() {
 				fmt.Print("\n")
 			}
 
-			if rtype == client.ResponseTypeDelegation {
+			switch rtype {
+			case client.ResponseTypeDelegation:
 				var label string
 				for _, rr := range r.Ns {
 					if ns, ok := rr.(*dns.NS); ok {
@@ -137,6 +138,10 @@ func main() {
 						glue = col("no glue", cYellow)
 					}
 					fmt.Printf("%s %d NS %s (%s)\n", label, s.TTL, s.Name, glue)
+				}
+			case client.ResponseTypeCNAME:
+				for _, rr := range r.Answer {
+					fmt.Println(rr)
 				}
 			}
 		},

@@ -67,10 +67,12 @@ func New() Client {
 // ParallelQuery perform an exchange using m with all servers in parallel and
 // return all responses.
 func (c *Client) ParallelQuery(m *dns.Msg, servers []Server) Responses {
+	mu := new(sync.Mutex)
 	rc := make(chan Response)
 	cnt := 0
 	for _, s := range servers {
 		for _, addr := range s.Addrs {
+			mu.Lock()
 			cnt++
 			go func(s Server, addr string) {
 				r := Response{
@@ -78,6 +80,7 @@ func (c *Client) ParallelQuery(m *dns.Msg, servers []Server) Responses {
 					Addr:   addr,
 				}
 				r.Msg, r.RTT, r.Err = c.Exchange(m, net.JoinHostPort(addr, "53"))
+				mu.Unlock()
 				rc <- r
 			}(s, addr)
 		}

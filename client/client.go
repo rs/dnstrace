@@ -77,7 +77,7 @@ func (c *Client) ParallelQuery(m *dns.Msg, servers []Server) Responses {
 					Server: s,
 					Addr:   addr,
 				}
-				r.Msg, r.RTT, r.Err = c.Exchange(m, net.JoinHostPort(addr, "53"))
+				r.Msg, r.RTT, r.Err = c.Exchange(m.Copy(), net.JoinHostPort(addr, "53"))
 				rc <- r
 			}(s, addr)
 		}

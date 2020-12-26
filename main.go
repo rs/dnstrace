@@ -41,6 +41,7 @@ func init() {
 
 func main() {
 	color := flag.Bool("color", true, "Enable/disable colors")
+	nsonly := flag.Bool("nsonly", false, "Only print nameservers")
 	flag.Parse()
 
 	if flag.NArg() < 2 || flag.NArg() > 3 {
@@ -90,13 +91,21 @@ func main() {
 			qname := m.Question[0].Name
 			qtype := dns.TypeToString[m.Question[0].Qtype]
 			if i > 1 {
+				if !*nsonly {
+					fmt.Println()
+				}
+			}
+			if !*nsonly {
+				fmt.Printf("%d - query %s %s", i, qtype, qname)
+			}
+			if r != nil {
+				if !*nsonly {
+					fmt.Printf(": %s", strings.Replace(strings.Replace(r.MsgHdr.String(), ";; ", "", -1), "\n", ", ", -1))
+				}
+			}
+			if !*nsonly {
 				fmt.Println()
 			}
-			fmt.Printf("%d - query %s %s", i, qtype, qname)
-			if r != nil {
-				fmt.Printf(": %s", strings.Replace(strings.Replace(r.MsgHdr.String(), ";; ", "", -1), "\n", ", ", -1))
-			}
-			fmt.Println()
 			for _, pr := range rs {
 				ln := 0
 				if pr.Msg != nil {
@@ -107,17 +116,25 @@ func main() {
 				if pr.Server.HasGlue {
 					lrtt = "0ms (from glue)"
 				} else if pr.Server.LookupRTT > 0 {
-					lrtt = fmt.Sprintf("%.2fms", float64(pr.Server.LookupRTT)/float64(time.Millisecond))
+					if !*nsonly {
+						lrtt = fmt.Sprintf("%.2fms", float64(pr.Server.LookupRTT)/float64(time.Millisecond))
+					}
 				}
-				fmt.Printf(col("  - %d bytes in %.2fms + %s lookup on %s(%s)", cDarkGray), ln, rtt, lrtt, pr.Server.Name, pr.Addr)
+				if !*nsonly {
+					fmt.Printf(col("  - %d bytes in %.2fms + %s lookup on %s(%s)", cDarkGray), ln, rtt, lrtt, pr.Server.Name, pr.Addr)
+				}
 				if pr.Err != nil {
 					err := pr.Err
 					if oerr, ok := err.(*net.OpError); ok {
 						err = oerr.Err
 					}
-					fmt.Printf(": %v", col(err, cRed))
+					if !*nsonly {
+						fmt.Printf(": %v", col(err, cRed))
+					}
 				}
-				fmt.Print("\n")
+				if !*nsonly {
+					fmt.Print("\n")
+				}
 			}
 
 			switch rtype {
@@ -133,15 +150,26 @@ func main() {
 				for _, s := range ns {
 					var glue string
 					if s.HasGlue {
-						glue = col("glue: "+strings.Join(s.Addrs, ","), cDarkGray)
+						if !*nsonly {
+							glue = col("glue: "+strings.Join(s.Addrs, ","), cDarkGray)
+						}
 					} else {
-						glue = col("no glue", cYellow)
+						if !*nsonly {
+							glue = col("no glue", cYellow)
+						}
 					}
-					fmt.Printf("%s %d NS %s (%s)\n", label, s.TTL, s.Name, glue)
+					if !*nsonly {
+						fmt.Printf("%s %d NS %s (%s)\n", label, s.TTL, s.Name, glue)
+					} else {
+						// just print the nameserver hostname without any details
+						fmt.Printf("%s\n", s.Name)
+					}
 				}
 			case client.ResponseTypeCNAME:
 				for _, rr := range r.Answer {
-					fmt.Println(rr)
+					if !*nsonly {
+						fmt.Println(rr)
+					}
 				}
 			}
 		},
@@ -154,10 +182,13 @@ func main() {
 		fmt.Printf(col("*** error: %v\n", cRed), err)
 		os.Exit(1)
 	}
-
-	fmt.Println()
-	fmt.Printf(col(";; Cold best path time: %s\n\n", cGray), rtt)
+	if !*nsonly {
+		fmt.Println()
+		fmt.Printf(col(";; Cold best path time: %s\n\n", cGray), rtt)
+	}
 	for _, rr := range r.Answer {
-		fmt.Println(rr)
+		if !*nsonly {
+			fmt.Println(rr)
+		}
 	}
 }

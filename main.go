@@ -43,7 +43,7 @@ func main() {
 	color := flag.Bool("color", true, "Enable/disable colors")
 	flag.Parse()
 
-	if flag.NArg() < 2 || flag.NArg() > 3 {
+	if flag.NArg() < 1 || flag.NArg() > 2 {
 		flag.Usage()
 		os.Exit(1)
 	}

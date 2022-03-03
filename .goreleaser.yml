@@ -1,20 +1,38 @@
-project_name: dnstrace
+before:
+  hooks:
+    - go mod tidy
+    - go generate ./...
+
 builds:
-  -
+  - id: dnstrace
     binary: dnstrace
     env:
       - CGO_ENABLED=0
     goos:
-      - darwin
       - linux
-      - freebsd
       - windows
-release:
-  name_template: "{{.ProjectName}}-v{{.Version}}"
-git:
-  short_hash: true
-brew:
-  github:
+      - darwin
+      - freebsd
+    goarch:
+      - arm64
+      - amd64
+
+archives:
+- builds:
+  - dnstrace
+  replacements:
+    darwin: Darwin
+    linux: Linux
+    windows: Windows
+    amd64: x86_64
+  format: tar.gz
+  format_overrides:
+    - goos: windows
+      format: zip
+
+brews:
+- name: dnstrace
+  tap:
     owner: rs
     name: homebrew-tap
   commit_author:
@@ -22,7 +40,12 @@ brew:
     email: rs@rhapsodyk.net
   homepage: https://github.com/rs/dnstrace
   description: DNS resolution tracing tool
-nfpm:
+  folder: Formula
+  install: |
+    bin.install "dnstrace"
+
+nfpms:
+- id: nfpms
   maintainer: Olivier Poitrey <rs@rhapsodyk.net>
   description: DNS resolution tracing tool
   license: MIT
@@ -30,3 +53,7 @@ nfpm:
     - deb
     - rpm
   bindir: /usr/bin
+
+checksum:
+  name_template: 'checksums.txt'
+

@@ -32,7 +32,7 @@ brew install rs/tap/dnstrace
 From source:
 
 ```
-go get github.com/rs/dnstrace
+go install github.com/rs/dnstrace@latest
 ```
 
 Or download a [binary package](https://github.com/rs/dnstrace/releases/latest).

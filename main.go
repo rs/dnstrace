@@ -23,6 +23,8 @@ const (
 	cCyan     = 36
 	cGray     = 37
 	cDarkGray = 90
+
+	maxRecursionDepth = 20
 )
 
 func colorize(s interface{}, color int, enabled bool) string {
@@ -78,7 +80,7 @@ func main() {
 	o.SetUDPSize(dns.DefaultMsgSize)
 	m.Extra = append(m.Extra, o)
 
-	c := client.New()
+	c := client.New(maxRecursionDepth) // limit recursion depth to 20
 	c.Client.Timeout = 500 * time.Millisecond
 	t := client.Tracer{
 		GotIntermediaryResponse: func(i int, m *dns.Msg, rs client.Responses, rtype client.ResponseType) {
@@ -149,7 +151,7 @@ func main() {
 			fmt.Printf(col("\n~ following CNAME %s -> %s\n", cBlue), domain, target)
 		},
 	}
-	r, rtt, err := c.RecursiveQuery(m, t)
+	r, rtt, err := c.RecursiveQuery(m, t, maxRecursionDepth)
 	if err != nil {
 		fmt.Printf(col("*** error: %v\n", cRed), err)
 		os.Exit(1)

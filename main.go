@@ -24,7 +24,7 @@ const (
 	cGray     = 37
 	cDarkGray = 90
 
-	maxRecursionDepth = 20
+	maxRecursionDepth = 20 // limit recursion depth to 20
 )
 
 func colorize(s interface{}, color int, enabled bool) string {
@@ -80,7 +80,7 @@ func main() {
 	o.SetUDPSize(dns.DefaultMsgSize)
 	m.Extra = append(m.Extra, o)
 
-	c := client.New(maxRecursionDepth) // limit recursion depth to 20
+	c := client.New(maxRecursionDepth)
 	c.Client.Timeout = 500 * time.Millisecond
 	t := client.Tracer{
 		GotIntermediaryResponse: func(i int, m *dns.Msg, rs client.Responses, rtype client.ResponseType) {

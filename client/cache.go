@@ -62,23 +62,23 @@ func (d *DelegationCache) Get(domain string) (label string, servers []Server) {
 
 // Add adds a server as a delegation for domain. If addrs is not specified,
 // server will be looked up. Returns false if already there
-func (d *DelegationCache) Add(domain string, s Server) bool {
+func (d *DelegationCache) Add(domain string, server Server) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	domain = strings.ToLower(domain)
 	for _, s2 := range d.c[domain] {
-		if domainEqual(s2.Name, s.Name) {
+		if domainEqual(s2.Name, server.Name) {
 			return false
 		}
 	}
 	if d.c == nil {
 		d.c = map[string][]Server{}
 	}
-	d.c[domain] = append(d.c[domain], s)
+	d.c[domain] = append(d.c[domain], server)
 	return true
 }
 
-type AddressAttempt struct {
+type addressAttempt struct {
 	Addresss   []string
 	RetryCount uint8
 }
@@ -86,7 +86,7 @@ type AddressAttempt struct {
 // LookupCache stores mixed lookup results for A and AAAA records of labels with
 // not support of TTL.
 type LookupCache struct {
-	c  map[string]AddressAttempt
+	c  map[string]addressAttempt
 	mu sync.Mutex
 }
 
@@ -94,19 +94,22 @@ func (c *LookupCache) Set(label string, addrs []string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.c == nil {
-		c.c = map[string]AddressAttempt{}
+		c.c = map[string]addressAttempt{}
 	}
 	key := strings.ToLower(label)
 	if len(addrs) == 0 {
 		aa := c.c[key]
-		aa.RetryCount++
-		c.c[key] = aa
+		if len(aa.Addresss) == 0 {
+			aa.RetryCount++
+			c.c[key] = aa
+		}
 		return
 	}
-	c.c[key] = AddressAttempt{Addresss: addrs, RetryCount: 1}
+	c.c[key] = addressAttempt{Addresss: addrs, RetryCount: 1}
 }
 
-func (c *LookupCache) Get(label string) AddressAttempt {
+// Get retrieve the saved address or the attempt
+func (c *LookupCache) Get(label string) addressAttempt {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.c[strings.ToLower(label)]

@@ -100,7 +100,7 @@ func domainEqual(d1, d2 string) bool {
 // RecursiveQuery performs a recursive query by querying all the available name
 // servers to gather statistics.
 // nolint: funlen,gocyclo,gocognit,nonamedreturns,varnamelen
-func (c *Client) RecursiveQuery(m *dns.Msg, tracer Tracer, depth uint8) (r *dns.Msg, rtt time.Duration, err error) {
+func (c *Client) RecursiveQuery(m *dns.Msg, tracer Tracer) (r *dns.Msg, rtt time.Duration, err error) {
 	// TODO: check m got a single question
 	m = m.Copy()
 	qname := m.Question[0].Name
@@ -118,7 +118,7 @@ func (c *Client) RecursiveQuery(m *dns.Msg, tracer Tracer, depth uint8) (r *dns.
 					var err error
 					lm := m.Copy()
 					lm.SetQuestion(s.Name, 0) // qtypes are set by lookup host
-					s.Addrs, s.LookupRTT = c.lookupHost(lm, depth+1)
+					s.Addrs, s.LookupRTT = c.lookupHost(lm)
 					if err != nil {
 						s.LookupErr = err
 					}
@@ -221,7 +221,7 @@ func (c *Client) RecursiveQuery(m *dns.Msg, tracer Tracer, depth uint8) (r *dns.
 }
 
 // nolint: nonamedreturns,varnamelen
-func (c *Client) lookupHost(m *dns.Msg, depth uint8) (addrs []string, rtt time.Duration) {
+func (c *Client) lookupHost(m *dns.Msg) (addrs []string, rtt time.Duration) {
 	qname := m.Question[0].Name
 	aa := c.LCache.Get(qname)
 	if len(aa.Addresss) != 0 || aa.RetryCount > c.maxRetryCount {
@@ -233,7 +233,7 @@ func (c *Client) lookupHost(m *dns.Msg, depth uint8) (addrs []string, rtt time.D
 		m := m.Copy()
 		m.Question[0].Qtype = qtype
 		go func() {
-			r, rtt, err := c.RecursiveQuery(m, Tracer{}, depth+1) // nolint: exhaustruct,govet
+			r, rtt, err := c.RecursiveQuery(m, Tracer{}) // nolint: exhaustruct,govet
 			rs <- Response{
 				Msg: r,
 				Err: err,

@@ -78,7 +78,8 @@ func (d *DelegationCache) Add(domain string, server Server) bool {
 	return true
 }
 
-type addressAttempt struct {
+// AddressAttempt stores resolved address and retry count if it's unresolved
+type AddressAttempt struct {
 	Addresss   []string
 	RetryCount uint8
 }
@@ -86,7 +87,7 @@ type addressAttempt struct {
 // LookupCache stores mixed lookup results for A and AAAA records of labels with
 // not support of TTL.
 type LookupCache struct {
-	c  map[string]addressAttempt
+	c  map[string]AddressAttempt
 	mu sync.Mutex
 }
 
@@ -94,7 +95,7 @@ func (c *LookupCache) Set(label string, addrs []string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.c == nil {
-		c.c = map[string]addressAttempt{}
+		c.c = map[string]AddressAttempt{}
 	}
 	key := strings.ToLower(label)
 	if len(addrs) == 0 {
@@ -105,11 +106,11 @@ func (c *LookupCache) Set(label string, addrs []string) {
 		}
 		return
 	}
-	c.c[key] = addressAttempt{Addresss: addrs, RetryCount: 1}
+	c.c[key] = AddressAttempt{Addresss: addrs, RetryCount: 1}
 }
 
 // Get retrieve the saved address or the attempt
-func (c *LookupCache) Get(label string) addressAttempt {
+func (c *LookupCache) Get(label string) AddressAttempt {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.c[strings.ToLower(label)]

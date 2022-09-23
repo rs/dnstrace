@@ -24,7 +24,7 @@ const (
 	cGray     = 37
 	cDarkGray = 90
 
-	maxRetry = 4 // limit retry of unresolved name to 4 times
+	maxRetry = 10 // limit retry of unresolved name to 10 times
 )
 
 func colorize(s interface{}, color int, enabled bool) string {

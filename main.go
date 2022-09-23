@@ -151,7 +151,7 @@ func main() {
 			fmt.Printf(col("\n~ following CNAME %s -> %s\n", cBlue), domain, target)
 		},
 	}
-	r, rtt, err := c.RecursiveQuery(m, t, maxRetry)
+	r, rtt, err := c.RecursiveQuery(m, t)
 	if err != nil {
 		fmt.Printf(col("*** error: %v\n", cRed), err)
 		os.Exit(1)

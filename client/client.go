@@ -16,7 +16,7 @@ type Client struct {
 	DCache DelegationCache
 	LCache LookupCache
 
-	maxRecursionDepth uint8
+	maxRetryCount uint8
 }
 
 type ResponseType int
@@ -59,12 +59,12 @@ type Tracer struct {
 }
 
 // New creates a new Client.
-func New(maxRecursionDepth uint8) Client {
+func New(maxRetryCount uint8) Client {
 	return Client{
 		DCache: DelegationCache{},
 		LCache: LookupCache{},
 
-		maxRecursionDepth: maxRecursionDepth,
+		maxRetryCount: maxRetryCount,
 	}
 }
 
@@ -195,7 +195,7 @@ func (c *Client) RecursiveQuery(m *dns.Msg, tracer Tracer, depth uint8) (r *dns.
 					TTL:     ns.Header().Ttl,
 					Addrs:   addrs,
 				}
-				_ = c.DCache.Add(name, s)
+				c.DCache.Add(name, s)
 				c.LCache.Set(s.Name, s.Addrs)
 				if tracer.GotIntermediaryResponse == nil {
 					// If not traced, only take first NS.
@@ -223,9 +223,9 @@ func (c *Client) RecursiveQuery(m *dns.Msg, tracer Tracer, depth uint8) (r *dns.
 // nolint: nonamedreturns,varnamelen
 func (c *Client) lookupHost(m *dns.Msg, depth uint8) (addrs []string, rtt time.Duration) {
 	qname := m.Question[0].Name
-	addrs = c.LCache.Get(qname)
-	if len(addrs) > 0 || depth > c.maxRecursionDepth {
-		return addrs, 0
+	aa := c.LCache.Get(qname)
+	if len(aa.Addresss) != 0 || aa.RetryCount > c.maxRetryCount {
+		return aa.Addresss, 0
 	}
 	qtypes := []uint16{dns.TypeA, dns.TypeAAAA}
 	rs := make(chan Response)

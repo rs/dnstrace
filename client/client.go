@@ -106,7 +106,7 @@ func (c *Client) RecursiveQuery(m *dns.Msg, tracer Tracer) (r *dns.Msg, rtt time
 	qname := m.Question[0].Name
 	qtype := m.Question[0].Qtype
 	zone := "."
-	for i := 1; i < 100; i++ {
+	for z := 1; z < 4; z++ {
 		_, servers := c.DCache.Get(qname)
 
 		// Resolve servers name if needed.
@@ -205,7 +205,7 @@ func (c *Client) RecursiveQuery(m *dns.Msg, tracer Tracer) (r *dns.Msg, rtt time
 		}
 
 		if tracer.GotIntermediaryResponse != nil {
-			tracer.GotIntermediaryResponse(i, m.Copy(), rs, rtype)
+			tracer.GotIntermediaryResponse(z, m.Copy(), rs, rtype)
 		}
 
 		switch rtype {
@@ -227,6 +227,7 @@ func (c *Client) lookupHost(m *dns.Msg) (addrs []string, rtt time.Duration) {
 	if len(aa.Addresss) != 0 || aa.RetryCount > c.maxRetryCount {
 		return aa.Addresss, 0
 	}
+	c.LCache.IncAttempt(qname)
 	qtypes := []uint16{dns.TypeA, dns.TypeAAAA}
 	rs := make(chan Response)
 	for _, qtype := range qtypes {

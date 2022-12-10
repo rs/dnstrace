@@ -91,6 +91,20 @@ type LookupCache struct {
 	mu sync.Mutex
 }
 
+// IncAttempt increase attempt to recursive resolve the address
+func (c *LookupCache) IncAttempt(label string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.c == nil {
+		c.c = map[string]AddressAttempt{}
+	}
+	key := strings.ToLower(label)
+	aa := c.c[key]
+	if len(aa.Addresss) == 0 {
+		aa.RetryCount++
+		c.c[key] = aa
+	}
+}
 func (c *LookupCache) Set(label string, addrs []string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()

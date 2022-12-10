@@ -227,6 +227,7 @@ func (c *Client) lookupHost(m *dns.Msg) (addrs []string, rtt time.Duration) {
 	if len(aa.Addresss) != 0 || aa.RetryCount > c.maxRetryCount {
 		return aa.Addresss, 0
 	}
+	c.LCache.IncAttempt(qname)
 	qtypes := []uint16{dns.TypeA, dns.TypeAAAA}
 	rs := make(chan Response)
 	for _, qtype := range qtypes {

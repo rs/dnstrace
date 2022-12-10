@@ -106,7 +106,7 @@ func (c *Client) RecursiveQuery(m *dns.Msg, tracer Tracer) (r *dns.Msg, rtt time
 	qname := m.Question[0].Name
 	qtype := m.Question[0].Qtype
 	zone := "."
-	for z := 1; z < 4; z++ {
+	for z := 1; z < 100; z++ {
 		_, servers := c.DCache.Get(qname)
 
 		// Resolve servers name if needed.
